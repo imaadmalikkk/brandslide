@@ -1,0 +1,68 @@
+{
+    "name": "Gymshark",
+    "colors": {
+        "background": "#1B1B1B",
+        "headline": "#FFFFFF",
+        "accent": "#00A8E8",
+        "subtext_primary": "#00A8E8",
+        "subtext_secondary": "#BBBCBC",
+        "gradient_target": "#000000",
+        "divider_default": "#FFFFFF",
+        "divider_alt": "#00A8E8",
+        "website": "#00A8E8"
+    },
+    "fonts": {
+        "headline": {
+            "path": "/System/Library/Fonts/Supplemental/Impact.ttf",
+            "size": 110
+        },
+        "subtext": {
+            "path": "/System/Library/Fonts/HelveticaNeue.ttc",
+            "size": 30,
+            "index": 1
+        },
+        "handle": {
+            "size": 26
+        }
+    },
+    "logo": {
+        "svg_path": "logo.png",
+        "opacity": 0.90,
+        "hook_size": 95,
+        "content_size": 60,
+        "padding": 18
+    },
+    "layout": {
+        "base_width": 1080,
+        "text_bottom_margin": 100,
+        "text_top_margin": 50,
+        "text_side_margin": 60,
+        "headline_line_spacing": 10,
+        "subtext_top_gap": 30,
+        "subtext_line_spacing": 10,
+        "divider_gap_above_text": 50,
+        "gradient_bleed": 450,
+        "gradient_max_alpha": 255,
+        "divider_thickness": 3,
+        "divider_gap": 20,
+        "handle_gap": 40
+    },
+    "scrim": null,
+    "text_shadow": null,
+    "website": "gymshark.com",
+    "scene_style": {
+        "base_prompt": "A slightly stylized hyperrealistic portrait image. Dark moody cinematic color grading with warm undertones. Dramatic gym lighting with deep shadows. Rich detailed textures. High-end cinematic CGI quality, trending on artstation.",
+        "negative_prompt": "text, words, letters, typography, gradient, overlay, watermark, logo, full face, eyes, stock photography, flat lighting, empty space, bright colors",
+        "model_tier": "pro",
+        "resolution": "4k",
+        "aspect_ratio": "4:5"
+    },
+    "closer": {
+        "options": [
+            {"headline": ["WE DO", "GYM"], "accent": "GYM"},
+            {"headline": ["TRAIN HARDER", "LOOK BETTER"], "accent": "HARDER"},
+            {"headline": ["UNITE THE", "CONDITIONING", "COMMUNITY"], "accent": "COMMUNITY"}
+        ],
+        "handle": "@gymshark"
+    }
+}

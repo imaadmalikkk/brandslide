@@ -1,0 +1,27 @@
+# Private brands (everything except gymshark example)
+brands/*
+!brands/gymshark/
+
+# Generated output
+**/output/*
+!**/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# User-specific Claude Code settings
+.claude/settings.local.json
+
+# NanoBanana thumbnails
+*_thumb.jpeg
+
+# Playwright MCP cache
+.playwright-mcp/
+
+# One-off screenshots/files
+mathani-homepage.png

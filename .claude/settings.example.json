@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash(mkdir -p:*)",
+      "Bash(cp:*)",
+      "Bash(ls:*)",
+      "mcp__nanobanana__generate_image",
+      "mcp__nanobanana__show_output_stats",
+      "WebSearch"
+    ]
+  }
+}
