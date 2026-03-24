@@ -3,9 +3,38 @@ name: setup
 description: Extract brand identity from a codebase or website and generate a complete brand folder (brand.json, compose_slide.py, CLAUDE.md, test slides) with pre-generation validation
 ---
 
-# /setup — Brand Identity Extraction & Generation
+# /setup — Brand Setup (Full Onboarding)
 
-You are setting up a new brand in the ContentGenerator platform. This is a 3-checkpoint interactive flow with built-in validation.
+You are setting up a new brand in brandslide. This handles EVERYTHING: installing dependencies, extracting brand identity, and generating test slides. 3 checkpoints.
+
+## Phase 0: Prerequisites (automatic, no user input needed)
+
+Run these silently before anything else. Fix any failures before proceeding.
+
+### 1. Python dependencies
+```bash
+pip install -r requirements.txt
+```
+If pip fails, try `pip3`. If both fail, tell the user to install Python 3.10+.
+
+### 2. Font availability
+Check that the default fonts exist:
+```bash
+python3 -c "from PIL import ImageFont; ImageFont.truetype('/System/Library/Fonts/Supplemental/Impact.ttf', 40); print('Impact: OK')"
+python3 -c "from PIL import ImageFont; ImageFont.truetype('/System/Library/Fonts/HelveticaNeue.ttc', 40); print('Helvetica Neue: OK')"
+```
+If a font is missing, warn the user (macOS required).
+
+### 3. Claude Code permissions
+Copy settings if they don't exist:
+```bash
+if [ ! -f .claude/settings.local.json ]; then cp .claude/settings.example.json .claude/settings.local.json; fi
+```
+
+### 4. NanoBanana check
+Try generating a tiny test image to verify NanoBanana is available. If it fails, warn the user but continue (they can add scenes manually later).
+
+Once all checks pass, print a brief status summary and move to Phase 1.
 
 ## Inputs
 
