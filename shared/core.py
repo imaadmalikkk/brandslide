@@ -79,30 +79,68 @@ def load_brand_config(json_path: str) -> dict:
     }
 
 
-def load_template(name_or_path: str) -> dict:
-    """Load a template JSON by name (from shared/templates/) or by file path."""
+def load_template(name_or_path: str, brand: dict = None) -> dict:
+    """Load a template JSON by name or file path.
+
+    Search order:
+    1. Exact file path (if name_or_path is a file)
+    2. Brand-specific templates: brands/<brand>/templates/<name>.json
+    3. Global templates: shared/templates/<name>.json
+    """
     if os.path.isfile(name_or_path):
         p = Path(name_or_path)
     else:
+        # Check brand-specific templates first
+        if brand and "_brand_dir" in brand:
+            brand_p = Path(brand["_brand_dir"]) / "templates" / f"{name_or_path}.json"
+            if brand_p.exists():
+                with open(brand_p) as f:
+                    return json.load(f)
+        # Fall back to global templates
         templates_dir = Path(__file__).parent / "templates"
         p = templates_dir / f"{name_or_path}.json"
         if not p.exists():
-            raise FileNotFoundError(f"Template not found: {name_or_path} (looked in {templates_dir})")
+            raise FileNotFoundError(f"Template not found: {name_or_path}")
     with open(p) as f:
         return json.load(f)
 
 
-def list_templates() -> list:
-    """Return list of available template names."""
-    templates_dir = Path(__file__).parent / "templates"
+def list_templates(brand: dict = None) -> list:
+    """Return list of available templates (global + brand-specific).
+
+    Brand-specific templates are listed first with a [brand] tag.
+    """
+    seen = set()
     templates = []
+
+    # Brand-specific templates (higher priority)
+    if brand and "_brand_dir" in brand:
+        brand_tmpl_dir = Path(brand["_brand_dir"]) / "templates"
+        if brand_tmpl_dir.exists():
+            for p in sorted(brand_tmpl_dir.glob("*.json")):
+                try:
+                    with open(p) as f:
+                        data = json.load(f)
+                    name = data.get("name", p.stem)
+                    seen.add(name)
+                    templates.append({"name": name, "description": data.get("description", ""),
+                                      "path": str(p), "scope": "brand"})
+                except Exception:
+                    pass
+
+    # Global templates
+    templates_dir = Path(__file__).parent / "templates"
     for p in sorted(templates_dir.glob("*.json")):
         try:
             with open(p) as f:
                 data = json.load(f)
-            templates.append({"name": data.get("name", p.stem), "description": data.get("description", ""), "path": str(p)})
+            name = data.get("name", p.stem)
+            if name not in seen:
+                templates.append({"name": name, "description": data.get("description", ""),
+                                  "path": str(p), "scope": "global"})
         except Exception:
             pass
+
     return templates
 
 
@@ -936,11 +974,11 @@ def process_config(config_path: str, brand: dict) -> list:
     elif line_color == "blue":
         line_color = "alt"
 
-    # Load template if specified
+    # Load template if specified (checks brand-specific first, then global)
     template = None
     template_name = config.get("template")
     if template_name:
-        template = load_template(template_name)
+        template = load_template(template_name, brand)
         print(f"Using template: {template.get('name', template_name)}\n")
 
     print(f"Compositing {len(config['slides'])} slides to {output_dir}:\n")
