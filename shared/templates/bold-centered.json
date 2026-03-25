@@ -1,0 +1,43 @@
+{
+    "name": "bold-centered",
+    "description": "Full-bleed scene with heavy overlay gradient. Text vertically centered. Large, commanding typography. Think motivational authority posts.",
+    "source": { "type": "original" },
+    "slide_layouts": {
+        "hook": {
+            "scene_mode": "full-bleed",
+            "text_position": "center",
+            "text_align": "center",
+            "gradient": { "direction": "full", "max_alpha_override": 180 },
+            "logo": { "position": "none" },
+            "show_subtext": false,
+            "show_handle": false,
+            "elements": []
+        },
+        "content": {
+            "scene_mode": "full-bleed",
+            "text_position": "center",
+            "text_align": "center",
+            "gradient": { "direction": "full", "max_alpha_override": 180 },
+            "logo": { "position": "bottom-right", "size_key": "content_size" },
+            "show_subtext": true,
+            "show_handle": false,
+            "elements": []
+        },
+        "closer": {
+            "scene_mode": "full-bleed",
+            "text_position": "center",
+            "text_align": "center",
+            "gradient": { "direction": "full", "max_alpha_override": 180 },
+            "logo": { "position": "bottom-right", "size_key": "content_size" },
+            "show_subtext": false,
+            "show_handle": true,
+            "elements": []
+        }
+    },
+    "font_overrides": {
+        "headline_size": 130
+    },
+    "scene_style_overrides": {
+        "base_prompt_append": "Strong atmospheric mood. The scene should be visually striking but not compete with centered text overlay."
+    }
+}

@@ -79,6 +79,33 @@ def load_brand_config(json_path: str) -> dict:
     }
 
 
+def load_template(name_or_path: str) -> dict:
+    """Load a template JSON by name (from shared/templates/) or by file path."""
+    if os.path.isfile(name_or_path):
+        p = Path(name_or_path)
+    else:
+        templates_dir = Path(__file__).parent / "templates"
+        p = templates_dir / f"{name_or_path}.json"
+        if not p.exists():
+            raise FileNotFoundError(f"Template not found: {name_or_path} (looked in {templates_dir})")
+    with open(p) as f:
+        return json.load(f)
+
+
+def list_templates() -> list:
+    """Return list of available template names."""
+    templates_dir = Path(__file__).parent / "templates"
+    templates = []
+    for p in sorted(templates_dir.glob("*.json")):
+        try:
+            with open(p) as f:
+                data = json.load(f)
+            templates.append({"name": data.get("name", p.stem), "description": data.get("description", ""), "path": str(p)})
+        except Exception:
+            pass
+    return templates
+
+
 # ---------------------------------------------------------------------------
 # Primitives
 # ---------------------------------------------------------------------------
@@ -259,11 +286,325 @@ def render_text_shadow(img, shadow_cfg, scale_fn, draw_callback):
 
 
 # ---------------------------------------------------------------------------
+# Template-driven compositor
+# ---------------------------------------------------------------------------
+
+def _compose_slide_templated(scene_path: str, slide_config: dict, output_path: str,
+                              brand: dict, template: dict,
+                              line_color: str = "default") -> str:
+    """Compose a slide using a template layout configuration.
+
+    Handles all template-defined layouts: text positioning (top/center/bottom),
+    gradient direction, logo placement, scene modes, and alignment.
+    """
+    slide_type = slide_config.get("type", "content")
+    colors = brand["colors"]
+    fonts_cfg = brand["fonts"]
+    logo_cfg = brand["logo"]
+    layout = brand["layout"]
+
+    # Resolve template layout for this slide type
+    slide_layouts = template.get("slide_layouts", {})
+    tmpl = slide_layouts.get(slide_type, slide_layouts.get("content", {}))
+
+    # Font overrides from template
+    font_ov = template.get("font_overrides", {})
+
+    base_width = layout.get("base_width", 1080)
+
+    # --- Scene loading ---
+    scene_mode = tmpl.get("scene_mode", "full-bleed")
+    if scene_mode == "none":
+        bg_color = colors.get("background", (0, 0, 0))
+        # Create solid background at 4K (4:5 ratio)
+        w, h = 3712, 4608
+        img = Image.new("RGBA", (w, h), (*bg_color, 255))
+    else:
+        img = Image.open(scene_path).convert("RGBA")
+        w, h = img.size
+
+    scale = w / base_width
+    s = lambda px: int(px * scale)
+
+    # --- Scrim ---
+    scrim_cfg = brand.get("scrim")
+    if scrim_cfg:
+        scrim = Image.new("RGBA", (w, h), (0, 0, 0, scrim_cfg.get("opacity", 30)))
+        img = Image.alpha_composite(img, scrim)
+
+    # --- Load fonts ---
+    hl_cfg = fonts_cfg["headline"]
+    st_cfg = fonts_cfg["subtext"]
+    hd_cfg = fonts_cfg.get("handle", {})
+
+    hl_size = font_ov.get("headline_size", hl_cfg["size"])
+    st_size = font_ov.get("subtext_size", st_cfg["size"])
+
+    headline_font = ImageFont.truetype(
+        hl_cfg["path"], s(hl_size), index=hl_cfg.get("index", 0))
+    subtext_font = ImageFont.truetype(
+        st_cfg["path"], s(st_size), index=st_cfg.get("index", 0))
+    handle_font = ImageFont.truetype(
+        hd_cfg.get("path", st_cfg["path"]),
+        s(hd_cfg.get("size", 26)),
+        index=hd_cfg.get("index", 0))
+
+    # --- Layout metrics ---
+    margin_bottom = s(layout.get("text_bottom_margin", 100))
+    margin_top = s(layout.get("text_top_margin", 50))
+    margin_side = s(layout.get("text_side_margin", 60))
+    max_text_w = w - 2 * margin_side
+
+    grad_cfg = tmpl.get("gradient", {})
+    bleed = s(grad_cfg.get("bleed_override") or layout.get("gradient_bleed", 350))
+    max_alpha = grad_cfg.get("max_alpha_override") or layout.get("gradient_max_alpha", 200)
+    grad_color = colors.get("gradient_target", (8, 12, 22))
+
+    # --- Prepare text ---
+    headline_lines = slide_config.get("headline", [])
+    accent_word = slide_config.get("accent_word", "")
+    subtext_amber = slide_config.get("subtext_amber", "").upper() if tmpl.get("show_subtext", False) else ""
+    subtext_white = slide_config.get("subtext_white", "").upper() if tmpl.get("show_subtext", False) else ""
+    handle_text = slide_config.get("handle", "") if tmpl.get("show_handle", False) else ""
+
+    all_lines = [line.upper() for line in headline_lines]
+    if accent_word and not any(accent_word.upper() in l.upper() for l in headline_lines):
+        all_lines.append(accent_word.upper())
+
+    headline_color = colors.get("headline", (255, 255, 255))
+    accent_color = colors.get("accent", (237, 140, 68))
+    subtext_primary = colors.get("subtext_primary", (237, 140, 68))
+    subtext_secondary = colors.get("subtext_secondary", (231, 231, 231))
+
+    # --- Measure text blocks ---
+    hl_ascent, _ = headline_font.getmetrics()
+    hl_line_sp = s(layout.get("headline_line_spacing", 10))
+    headline_total_h = len(all_lines) * hl_ascent
+    if len(all_lines) > 1:
+        headline_total_h += (len(all_lines) - 1) * hl_line_sp
+
+    subtext_gap = s(layout.get("subtext_top_gap", 30))
+    sub_line_sp = s(layout.get("subtext_line_spacing", 10))
+    amber_lines = wrap_text(subtext_amber, subtext_font, max_text_w) if subtext_amber else []
+    white_lines = wrap_text(subtext_white, subtext_font, max_text_w) if subtext_white else []
+    single_sub_h = subtext_font.getbbox("A")[3] - subtext_font.getbbox("A")[1] if (amber_lines or white_lines) else 0
+    total_sub_lines = len(amber_lines) + len(white_lines)
+    subtext_total_h = (total_sub_lines * single_sub_h + (total_sub_lines - 1) * sub_line_sp) if total_sub_lines > 0 else 0
+
+    handle_h = 0
+    handle_gap = s(layout.get("handle_gap", 40))
+    if handle_text:
+        handle_h = handle_font.getbbox(handle_text)[3] - handle_font.getbbox(handle_text)[1]
+
+    # Total text block height
+    total_text_h = headline_total_h
+    if subtext_total_h > 0:
+        total_text_h += subtext_gap + subtext_total_h
+    if handle_text:
+        total_text_h += handle_gap + handle_h
+
+    # --- Calculate text position ---
+    text_pos = tmpl.get("text_position", "bottom")
+    text_align = tmpl.get("text_align", "center")
+
+    if text_pos == "bottom":
+        text_top_y = h - margin_bottom - total_text_h
+    elif text_pos == "top":
+        text_top_y = margin_top
+    elif text_pos == "center":
+        text_top_y = (h - total_text_h) // 2
+    else:
+        text_top_y = h - margin_bottom - total_text_h
+
+    # Auto-shrink if text block too large (> 55% of image)
+    max_text_zone = int(h * 0.55)
+    if total_text_h > max_text_zone:
+        shrink = max_text_zone / total_text_h
+        new_hl_size = max(s(40), int(headline_font.size * shrink))
+        headline_font = ImageFont.truetype(hl_cfg["path"], new_hl_size, index=hl_cfg.get("index", 0))
+        hl_ascent, _ = headline_font.getmetrics()
+        headline_total_h = len(all_lines) * hl_ascent + max(0, len(all_lines) - 1) * hl_line_sp
+
+        new_st_size = max(s(15), int(subtext_font.size * shrink))
+        subtext_font = ImageFont.truetype(st_cfg["path"], new_st_size, index=st_cfg.get("index", 0))
+        amber_lines = wrap_text(subtext_amber, subtext_font, max_text_w) if subtext_amber else []
+        white_lines = wrap_text(subtext_white, subtext_font, max_text_w) if subtext_white else []
+        single_sub_h = subtext_font.getbbox("A")[3] - subtext_font.getbbox("A")[1] if (amber_lines or white_lines) else 0
+        total_sub_lines = len(amber_lines) + len(white_lines)
+        subtext_total_h = (total_sub_lines * single_sub_h + (total_sub_lines - 1) * sub_line_sp) if total_sub_lines > 0 else 0
+
+        total_text_h = headline_total_h
+        if subtext_total_h > 0:
+            total_text_h += subtext_gap + subtext_total_h
+        if handle_text:
+            total_text_h += handle_gap + handle_h
+
+        if text_pos == "bottom":
+            text_top_y = h - margin_bottom - total_text_h
+        elif text_pos == "top":
+            text_top_y = margin_top
+        elif text_pos == "center":
+            text_top_y = (h - total_text_h) // 2
+
+    # --- Gradient ---
+    grad_dir = grad_cfg.get("direction", "bottom-up")
+    if grad_dir == "bottom-up":
+        gradient = create_gradient(w, h, text_edge=text_top_y, fade_length=bleed,
+                                   color=grad_color, from_top=False, max_alpha=max_alpha)
+        img = Image.alpha_composite(img, gradient)
+    elif grad_dir == "top-down":
+        text_bottom_edge = text_top_y + total_text_h
+        gradient = create_gradient(w, h, text_edge=text_bottom_edge, fade_length=bleed,
+                                   color=grad_color, from_top=True, max_alpha=max_alpha)
+        img = Image.alpha_composite(img, gradient)
+    elif grad_dir == "full":
+        overlay = Image.new("RGBA", (w, h), (*grad_color, max_alpha))
+        img = Image.alpha_composite(img, overlay)
+    # "none" = no gradient
+
+    draw = ImageDraw.Draw(img)
+
+    # --- Render headline ---
+    # For left-align, adjust margin_side param to render_headline_block
+    if text_align == "left":
+        # render_headline_block centers text within max_text_w by default
+        # For left-align, we render each line at margin_side directly
+        y = text_top_y
+        effective_font = headline_font
+        base_size = headline_font.size
+        for line in all_lines:
+            test_font = get_font_for_line(line, headline_font, base_size, max_text_w,
+                                          hl_cfg["path"], hl_cfg.get("index", 0))
+            if test_font.size < effective_font.size:
+                effective_font = test_font
+        for line in all_lines:
+            upper_accent = accent_word.upper() if accent_word else ""
+            if upper_accent and upper_accent in line:
+                idx = line.index(upper_accent)
+                before = line[:idx].rstrip()
+                accent = line[idx:idx + len(upper_accent)]
+                after = line[idx + len(upper_accent):].lstrip()
+                cx = margin_side
+                space_w = effective_font.getbbox(" ")[2] - effective_font.getbbox(" ")[0]
+                if before:
+                    draw.text((cx, y), before, fill=(*headline_color, 255), font=effective_font)
+                    cx += effective_font.getbbox(before)[2] - effective_font.getbbox(before)[0] + space_w
+                draw.text((cx, y), accent, fill=(*accent_color, 255), font=effective_font)
+                cx += effective_font.getbbox(accent)[2] - effective_font.getbbox(accent)[0]
+                if after:
+                    cx += space_w
+                    draw.text((cx, y), after, fill=(*headline_color, 255), font=effective_font)
+            else:
+                draw.text((margin_side, y), line, fill=(*headline_color, 255), font=effective_font)
+            ascent, _ = effective_font.getmetrics()
+            y += ascent + hl_line_sp
+        y_after = y
+    else:
+        y_after = render_headline_block(draw, all_lines, accent_word, headline_font,
+                                        margin_side, max_text_w, text_top_y, hl_line_sp,
+                                        headline_color, accent_color,
+                                        hl_cfg["path"], hl_cfg.get("index", 0))
+
+    # --- Render subtext ---
+    if amber_lines or white_lines:
+        y = y_after + subtext_gap
+        for al in amber_lines:
+            bbox = subtext_font.getbbox(al)
+            tw = bbox[2] - bbox[0]
+            lh = bbox[3] - bbox[1]
+            if text_align == "left":
+                cx = margin_side
+            else:
+                cx = margin_side + (max_text_w - tw) // 2
+            draw.text((cx, y), al, fill=(*subtext_primary, 255), font=subtext_font)
+            y += lh + sub_line_sp
+        for wl in white_lines:
+            bbox = subtext_font.getbbox(wl)
+            tw = bbox[2] - bbox[0]
+            lh = bbox[3] - bbox[1]
+            if text_align == "left":
+                cx = margin_side
+            else:
+                cx = margin_side + (max_text_w - tw) // 2
+            draw.text((cx, y), wl, fill=(*subtext_secondary, 255), font=subtext_font)
+            y += lh + sub_line_sp
+
+    # --- Render handle ---
+    if handle_text:
+        handle_y = text_top_y + headline_total_h + (subtext_gap + subtext_total_h if subtext_total_h > 0 else 0) + handle_gap
+        bbox = handle_font.getbbox(handle_text)
+        tw = bbox[2] - bbox[0]
+        if text_align == "left":
+            cx = margin_side
+        else:
+            cx = margin_side + (max_text_w - tw) // 2
+        draw.text((cx, handle_y), handle_text, fill=(*headline_color, 230), font=handle_font)
+
+    # --- Logo ---
+    logo_tmpl = tmpl.get("logo", {})
+    logo_pos = logo_tmpl.get("position", "bottom-right")
+    logo_size_key = logo_tmpl.get("size_key", "content_size")
+    logo_px = s(logo_cfg.get(logo_size_key, 60))
+
+    if logo_pos != "none" and logo_px > 0:
+        logo = load_logo(logo_cfg["svg_path"], logo_px, logo_cfg.get("opacity", 0.90))
+        lw, lh = logo.size
+        pad = s(logo_cfg.get("padding", 18))
+
+        if logo_pos == "bottom-right":
+            img.paste(logo, (w - lw - pad, h - lh - pad), logo)
+        elif logo_pos == "top-right":
+            img.paste(logo, (w - lw - pad, pad), logo)
+        elif logo_pos == "top-left":
+            img.paste(logo, (pad, pad), logo)
+        elif logo_pos == "center-divider":
+            divider_y = text_top_y - s(layout.get("divider_gap_above_text", 50))
+            logo_x = (w - lw) // 2
+            logo_y = divider_y - (lh // 2)
+            div_color_key = "divider_alt" if line_color == "alt" else "divider_default"
+            div_color = colors.get(div_color_key, headline_color)
+            line_thick = max(1, s(layout.get("divider_thickness", 3)))
+            gap = s(layout.get("divider_gap", 20))
+            left_end = logo_x - gap
+            right_start = logo_x + lw + gap
+            if left_end > 0:
+                draw.rectangle([0, divider_y, left_end, divider_y + line_thick],
+                               fill=(*div_color, 180))
+            if right_start < w:
+                draw.rectangle([right_start, divider_y, w, divider_y + line_thick],
+                               fill=(*div_color, 180))
+            img.paste(logo, (logo_x, logo_y), logo)
+
+    # --- Website URL ---
+    website_url = brand.get("website")
+    if website_url and slide_config.get("show_website", False):
+        website_color = colors.get("website", (110, 193, 214))
+        website_font = ImageFont.truetype(
+            hd_cfg.get("path", st_cfg["path"]), s(hd_cfg.get("size", 26)),
+            index=hd_cfg.get("index", 0))
+        website_text = website_url.upper()
+        bbox = website_font.getbbox(website_text)
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+        cx = (w - tw) // 2
+        cy = h - s(40) - th
+        draw.text((cx, cy), website_text, fill=(*website_color, 255), font=website_font)
+
+    # --- Save ---
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    img.save(output_path, "PNG", optimize=False)
+    size_mb = os.path.getsize(output_path) / 1024 / 1024
+    print(f"  [{slide_type:7s}] {Path(output_path).name} ({size_mb:.1f}MB) [template: {template.get('name', '?')}]")
+    return output_path
+
+
+# ---------------------------------------------------------------------------
 # Main compositor
 # ---------------------------------------------------------------------------
 
 def compose_slide(scene_path: str, slide_config: dict, output_path: str,
-                  brand: dict, line_color: str = "default") -> str:
+                  brand: dict, line_color: str = "default",
+                  template: dict = None) -> str:
     """Compose a complete branded slide from a scene-only image.
 
     Args:
@@ -272,10 +613,17 @@ def compose_slide(scene_path: str, slide_config: dict, output_path: str,
         output_path: Where to save the composited slide.
         brand: Brand config dict from load_brand_config().
         line_color: "default" or "alt" — selects divider line color from brand config.
+        template: Optional template dict from load_template(). If provided and not
+                  cinematic-story, uses the template-driven compositor.
 
     Returns:
         output_path
     """
+    # Route to template compositor for non-legacy templates
+    if template and template.get("name") != "cinematic-story":
+        return _compose_slide_templated(scene_path, slide_config, output_path,
+                                         brand, template, line_color)
+    # Legacy path: original compositor (cinematic-story / no template)
     slide_type = slide_config.get("type", "content")
 
     colors = brand["colors"]
@@ -362,8 +710,16 @@ def compose_slide(scene_path: str, slide_config: dict, output_path: str,
         if total_sub_lines > 0:
             subtext_total_h = total_sub_lines * single_line_h + (total_sub_lines - 1) * line_sp
 
+        # Fixed logo dimensions (never changes size)
+        logo_content_px = s(logo_cfg.get("content_size", 60))
+        logo_pad = s(logo_cfg.get("padding", 18))
+        logo_reserve = logo_content_px + logo_pad + s(10) if logo_content_px > 0 else 0
+
+        # Bottom margin must clear the logo
+        effective_bottom = max(margin_bottom, logo_reserve)
+
         # Total block height: headline + gap + subtext + bottom margin
-        total_block_h = headline_total_h + headline_subtext_gap + subtext_total_h + margin_bottom
+        total_block_h = headline_total_h + headline_subtext_gap + subtext_total_h + effective_bottom
         text_top_y = h - total_block_h
 
         # Auto-shrink if block exceeds 55% of image height
@@ -389,7 +745,7 @@ def compose_slide(scene_path: str, slide_config: dict, output_path: str,
             total_sub_lines = len(amber_lines) + len(white_lines)
             subtext_total_h = total_sub_lines * single_line_h + (total_sub_lines - 1) * line_sp if total_sub_lines > 0 else 0
 
-            total_block_h = headline_total_h + headline_subtext_gap + subtext_total_h + margin_bottom
+            total_block_h = headline_total_h + headline_subtext_gap + subtext_total_h + effective_bottom
             text_top_y = h - total_block_h
 
         # Single bottom gradient — solid behind text, fade above
@@ -423,16 +779,11 @@ def compose_slide(scene_path: str, slide_config: dict, output_path: str,
             draw.text((cx, y), wl, fill=(*subtext_secondary, 255), font=subtext_font)
             y += lh + line_sp
 
-        # Logo bottom-right (skip if content_size is 0)
-        if logo_cfg.get("content_size", 60) > 0:
-            logo_px = s(logo_cfg.get("content_size", 60))
-            pad = s(logo_cfg.get("padding", 18))
-            available = h - y - s(10) - pad
-            if available < logo_px:
-                logo_px = max(s(30), available)
-            logo = load_logo(logo_cfg["svg_path"], logo_px, logo_cfg.get("opacity", 0.90))
+        # Logo bottom-right — FIXED size, always same position
+        if logo_content_px > 0:
+            logo = load_logo(logo_cfg["svg_path"], logo_content_px, logo_cfg.get("opacity", 0.90))
             lw, lh = logo.size
-            img.paste(logo, (w - lw - pad, y + s(10)), logo)
+            img.paste(logo, (w - lw - logo_pad, h - lh - logo_pad), logo)
 
     # --- CLOSER: vertically centered text ---
     elif slide_type == "closer":
@@ -468,17 +819,13 @@ def compose_slide(scene_path: str, slide_config: dict, output_path: str,
             draw.text((cx, handle_y), handle_text,
                       fill=(*headline_color, 230), font=handle_font)
 
-        # Logo bottom-right (skip if content_size is 0)
-        if logo_cfg.get("content_size", 60) > 0:
-            text_end_y = text_top_y + total_block_h
-            logo_px = s(logo_cfg.get("content_size", 60))
+        # Logo bottom-right — FIXED size
+        logo_px = s(logo_cfg.get("content_size", 60))
+        if logo_px > 0:
             pad = s(logo_cfg.get("padding", 18))
-            available = h - text_end_y - s(10) - pad
-            if available < logo_px:
-                logo_px = max(s(30), available)
             logo = load_logo(logo_cfg["svg_path"], logo_px, logo_cfg.get("opacity", 0.90))
             lw, lh = logo.size
-            img.paste(logo, (w - lw - pad, text_end_y + s(10)), logo)
+            img.paste(logo, (w - lw - pad, h - lh - pad), logo)
 
     # --- HOOK: everything at BOTTOM ---
     elif slide_type == "hook":
@@ -535,17 +882,13 @@ def compose_slide(scene_path: str, slide_config: dict, output_path: str,
                               headline_color, accent_color,
                               hl_cfg["path"], hl_cfg.get("index", 0))
 
-        # Logo bottom-right (skip if content_size is 0)
-        if logo_cfg.get("content_size", 60) > 0:
-            text_end_y = h - margin_bottom
-            logo_px = s(logo_cfg.get("content_size", 60))
+        # Logo bottom-right — FIXED size
+        logo_px = s(logo_cfg.get("content_size", 60))
+        if logo_px > 0:
             pad = s(logo_cfg.get("padding", 18))
-            available = h - text_end_y - s(10) - pad
-            if available < logo_px:
-                logo_px = max(s(30), available)
             logo = load_logo(logo_cfg["svg_path"], logo_px, logo_cfg.get("opacity", 0.90))
             lw, lh = logo.size
-            img.paste(logo, (w - lw - pad, text_end_y + s(10)), logo)
+            img.paste(logo, (w - lw - pad, h - lh - pad), logo)
 
     # --- Website URL (brand-level, rendered only when slide requests it) ---
     website_url = brand.get("website")
@@ -593,6 +936,13 @@ def process_config(config_path: str, brand: dict) -> list:
     elif line_color == "blue":
         line_color = "alt"
 
+    # Load template if specified
+    template = None
+    template_name = config.get("template")
+    if template_name:
+        template = load_template(template_name)
+        print(f"Using template: {template.get('name', template_name)}\n")
+
     print(f"Compositing {len(config['slides'])} slides to {output_dir}:\n")
 
     outputs = []
@@ -604,7 +954,7 @@ def process_config(config_path: str, brand: dict) -> list:
         output_name = slide.get("output", f"{i + 1}.png")
         output_path = str(output_dir / output_name)
 
-        compose_slide(scene_path, slide, output_path, brand, line_color)
+        compose_slide(scene_path, slide, output_path, brand, line_color, template)
         outputs.append(output_path)
 
     print(f"\nDone! Composited {len(config['slides'])} slides.")

@@ -119,15 +119,41 @@ You can also filter by pillar: `/ideate my-brand nutrition`
 
 ---
 
-### 4. `/generate [brand] "topic"` — Produce a carousel
+### 4. `/template` — Create and manage visual templates
+
+```
+/template list
+/template inspire
+/template create "my-style"
+/template preview "bold-centered" my-brand
+```
+
+Templates define the complete visual recipe for a carousel — where text sits, gradient direction, logo placement, scene style. The platform ships with 4 built-in templates:
+
+| Template | Look |
+|----------|------|
+| **cinematic-story** | Scene fills top, text at bottom with gradient. The classic look. |
+| **bold-centered** | Full dark overlay, text vertically centered. Commanding, motivational. |
+| **editorial-clean** | Text at top with top-down gradient. Editorial magazine feel. |
+| **text-forward** | No scene — solid dark background, giant typography dominates. |
+
+**`/template inspire`** is the key feature: show Claude a screenshot, Instagram URL, or description of a carousel you saw online. It analyzes the visual, tells you what it can and can't reproduce in Pillow, then builds a reusable template from it.
+
+Templates are global — any brand can use any template. The template provides structure; the brand provides colors, fonts, and logo.
+
+---
+
+### 5. `/generate [brand] "topic"` — Produce a carousel
 
 ```
 /generate my-brand "exercises you're doing wrong"
+/generate my-brand "topic" --template bold-centered
 ```
 
 This is the full production pipeline. It runs mostly autonomously with one confirmation checkpoint:
 
-1. **Load brand config** — reads `brand.json` + `CLAUDE.md`
+1. **Template selection** — pick a template (or use cinematic-story by default)
+2. **Load brand config** — reads `brand.json` + `CLAUDE.md`
 2. **Research** — 5–7 web searches on the topic, following whatever accuracy rules your brand defines (e.g., cite scientific studies for fitness brands, verify hadith for Islamic brands)
 3. **Script** — writes every slide: headlines, accent words, subtext, and detailed scene descriptions
 4. **You confirm the script** — this is the one checkpoint. Review headlines, subtext, and scene ideas. Approve or adjust.
@@ -168,8 +194,13 @@ You can use this to test compositing immediately, or as a reference when buildin
 brandslide/
 ├── shared/
 │   ├── core.py                     # Compositing engine — all brands share this
-│   └── templates/
-│       └── compose_template.py     # Template for new brand scripts
+│   ├── templates/
+│   │   ├── cinematic-story.json    # Built-in: bottom text, gradient (classic)
+│   │   ├── bold-centered.json      # Built-in: centered text, full overlay
+│   │   ├── editorial-clean.json    # Built-in: top text, editorial feel
+│   │   ├── text-forward.json       # Built-in: no scene, giant text
+│   │   └── [your-templates].json   # User-created from /template inspire
+│   └── compose_template.py         # Template for new brand scripts (used by /setup)
 ├── brands/
 │   └── gymshark/                   # Example brand (your brands go here)
 │       ├── brand.json              # Visual config (colors, fonts, layout)
@@ -183,6 +214,7 @@ brandslide/
 │   └── skills/
 │       ├── setup/SKILL.md          # /setup command
 │       ├── tune/SKILL.md           # /tune command
+│       ├── template/SKILL.md       # /template command
 │       ├── ideate/SKILL.md         # /ideate command
 │       └── generate/SKILL.md       # /generate command
 └── docs/

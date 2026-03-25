@@ -11,18 +11,25 @@ You are producing a complete Instagram carousel for a specific brand. This is a 
 
 - **Brand name** (required) — must match a folder in `brands/`
 - **Topic** (required) — the carousel subject
+- **Template** (optional) — `--template <name>` to use a specific visual template
 
-Parse from the user's message: `/generate gymshark "exercises you're doing wrong"` or `/generate amar "Arabic words lost in translation"`
+Parse from the user's message: `/generate gymshark "exercises you're doing wrong"` or `/generate amar "topic" --template bold-centered`
 
-## Step 1: Load Brand Config
+## Step 1: Load Brand Config + Template
 
-Load both config files:
+Load brand config files:
 ```
 brands/<brand>/brand.json    → visual config, scene style, closer options
 brands/<brand>/CLAUDE.md     → content strategy, pillars, voice, research rules
 ```
 
 Use `load_brand_config()` from shared/core.py to parse brand.json.
+
+**Template selection:**
+- If `--template <name>` specified, load it with `load_template(name)`
+- If no template specified, show available templates with `list_templates()` and ask the user which to use. Default to "cinematic-story" if they want the standard look.
+- If the template has `scene_style_overrides`, apply them automatically to NanoBanana prompts in Step 5.
+- If the template has `scene_required: false` (like text-forward), skip scene generation entirely in Step 5.
 
 Determine the output directory:
 ```
@@ -53,10 +60,12 @@ If the brand's CLAUDE.md doesn't define specific research rules, apply general b
 
 ## Step 3: Write Slide Script
 
+**IMPORTANT — Hook Slide:** Before writing the hook, read the brand's CLAUDE.md "Hook Framework" section. Score your hook against the 7-point checklist (must score 5+/7). Use the brand's hook archetypes and accent word rules. Different brands have different emotional palettes — follow theirs, not a generic template.
+
 Based on research, write the complete slide script:
 
 ```
-Slide 1 (Hook): [HEADLINE] — accent: [WORD]
+Slide 1 (Hook): [HEADLINE] — accent: [WORD] — archetype: [which of the 8 types] — score: [X/7]
 Slide 2: [HEADLINE] — accent: [WORD] / primary subtext: [text] / secondary subtext: [text]
 Slide 3: [HEADLINE] — accent: [WORD] / primary subtext: [text] / secondary subtext: [text]
 ...
@@ -121,6 +130,7 @@ Create the carousel config for the compositor:
 {
     "output_dir": "brands/<brand>/output/<topic-slug>/",
     "line_color": "default",
+    "template": "<template-name>",
     "slides": [
         {
             "scene": "scenes/1.png",
@@ -131,6 +141,8 @@ Create the carousel config for the compositor:
     ]
 }
 ```
+
+The `"template"` field is read by `process_config()` which loads and passes the template to each `compose_slide()` call.
 
 Save to `brands/<brand>/output/<topic-slug>/carousel.json`.
 

@@ -182,6 +182,11 @@ If any check fails, report the issue and fix it before proceeding to file genera
    - Content strategy (goal, content model, pillars table)
    - Voice and tone guidelines
    - Carousel structure (narrative arc)
+   - **Hook Framework** — MUST include:
+     - 7-point scoring checklist (specificity, curiosity gap, personal stakes, emotional trigger, authority/science signal, scannability, accent clarity)
+     - 8 hook archetypes adapted to the brand's niche and emotional palette (see brands/amar/CLAUDE.md and brands/mathani/CLAUDE.md for examples)
+     - Accent word rules specific to the brand's tone (threat verbs for authority brands, discovery verbs for empowerment brands)
+     - Hook red lines (what to never do for this brand)
    - Scene direction and scene ideas bank
    - Research and accuracy rules (brand-specific rigor)
    - Closer slide options

@@ -1,0 +1,43 @@
+{
+    "name": "text-forward",
+    "description": "Solid dark background, no scene. Giant typography dominates. For text-heavy educational content where the words ARE the visual.",
+    "source": { "type": "original" },
+    "slide_layouts": {
+        "hook": {
+            "scene_mode": "none",
+            "text_position": "center",
+            "text_align": "center",
+            "gradient": { "direction": "none" },
+            "logo": { "position": "bottom-right", "size_key": "content_size" },
+            "show_subtext": false,
+            "show_handle": false,
+            "elements": []
+        },
+        "content": {
+            "scene_mode": "none",
+            "text_position": "center",
+            "text_align": "left",
+            "gradient": { "direction": "none" },
+            "logo": { "position": "bottom-right", "size_key": "content_size" },
+            "show_subtext": true,
+            "show_handle": false,
+            "elements": []
+        },
+        "closer": {
+            "scene_mode": "none",
+            "text_position": "center",
+            "text_align": "center",
+            "gradient": { "direction": "none" },
+            "logo": { "position": "bottom-right", "size_key": "content_size" },
+            "show_subtext": false,
+            "show_handle": true,
+            "elements": []
+        }
+    },
+    "font_overrides": {
+        "headline_size": 140
+    },
+    "scene_style_overrides": {
+        "scene_required": false
+    }
+}

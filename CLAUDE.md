@@ -78,11 +78,17 @@ Extract brand identity from a codebase or website. Interactive 3-checkpoint flow
 2. Voice extraction (pillars, tone, audience)
 3. Generate brand folder with test slides
 
+### /tune [brand]
+Rapidly iterate on brand.json visual parameters with side-by-side comparison slides.
+
+### /template [list|inspire|create|preview|delete]
+Create and manage visual templates. Templates define the complete visual recipe (layout, gradient, typography, scene style). Use `/template inspire` to create templates from Instagram posts or screenshots. 4 built-in templates: cinematic-story, bold-centered, editorial-clean, text-forward.
+
 ### /ideate [brand]
 Brainstorm 5 carousel ideas ranked by engagement potential. Checks existing output for dedup, researches trending topics.
 
-### /generate [brand] [topic]
-Full production pipeline: research, script, NanoBanana scenes, compositing, QA. One confirmation checkpoint (slide script approval), then autonomous through compositing.
+### /generate [brand] [topic] [--template name]
+Full production pipeline: research, script, NanoBanana scenes, compositing, QA. One confirmation checkpoint (slide script approval), then autonomous through compositing. Accepts `--template` flag to use a specific visual template.
 
 ---
 

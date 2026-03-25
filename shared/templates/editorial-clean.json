@@ -1,0 +1,41 @@
+{
+    "name": "editorial-clean",
+    "description": "Text at TOP with top-down gradient. Scene fills bottom 60%. Clean editorial magazine feel. Good for educational content where text leads.",
+    "source": { "type": "original" },
+    "slide_layouts": {
+        "hook": {
+            "scene_mode": "full-bleed",
+            "text_position": "top",
+            "text_align": "center",
+            "gradient": { "direction": "top-down" },
+            "logo": { "position": "top-right", "size_key": "content_size" },
+            "show_subtext": false,
+            "show_handle": false,
+            "elements": []
+        },
+        "content": {
+            "scene_mode": "full-bleed",
+            "text_position": "top",
+            "text_align": "center",
+            "gradient": { "direction": "top-down" },
+            "logo": { "position": "bottom-right", "size_key": "content_size" },
+            "show_subtext": true,
+            "show_handle": false,
+            "elements": []
+        },
+        "closer": {
+            "scene_mode": "full-bleed",
+            "text_position": "top",
+            "text_align": "center",
+            "gradient": { "direction": "top-down" },
+            "logo": { "position": "bottom-right", "size_key": "content_size" },
+            "show_subtext": false,
+            "show_handle": true,
+            "elements": []
+        }
+    },
+    "font_overrides": {},
+    "scene_style_overrides": {
+        "base_prompt_append": "Key subject matter positioned in the lower half of the frame, leaving the upper area darker and less busy for text overlay."
+    }
+}

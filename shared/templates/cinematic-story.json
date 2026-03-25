@@ -1,0 +1,39 @@
+{
+    "name": "cinematic-story",
+    "description": "Full-bleed cinematic scene with text anchored to the bottom. Smooth gradient fades from scene into dark text zone. The classic brandslide look.",
+    "source": { "type": "original" },
+    "slide_layouts": {
+        "hook": {
+            "scene_mode": "full-bleed",
+            "text_position": "bottom",
+            "text_align": "center",
+            "gradient": { "direction": "bottom-up" },
+            "logo": { "position": "center-divider", "size_key": "hook_size" },
+            "show_subtext": false,
+            "show_handle": false,
+            "elements": ["divider_line"]
+        },
+        "content": {
+            "scene_mode": "full-bleed",
+            "text_position": "bottom",
+            "text_align": "center",
+            "gradient": { "direction": "bottom-up" },
+            "logo": { "position": "bottom-right", "size_key": "content_size" },
+            "show_subtext": true,
+            "show_handle": false,
+            "elements": []
+        },
+        "closer": {
+            "scene_mode": "full-bleed",
+            "text_position": "bottom",
+            "text_align": "center",
+            "gradient": { "direction": "bottom-up" },
+            "logo": { "position": "bottom-right", "size_key": "content_size" },
+            "show_subtext": false,
+            "show_handle": true,
+            "elements": []
+        }
+    },
+    "font_overrides": {},
+    "scene_style_overrides": {}
+}
