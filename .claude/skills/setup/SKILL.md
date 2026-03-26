@@ -31,8 +31,60 @@ Copy settings if they don't exist:
 if [ ! -f .claude/settings.local.json ]; then cp .claude/settings.example.json .claude/settings.local.json; fi
 ```
 
-### 4. NanoBanana check
-Try generating a tiny test image to verify NanoBanana is available. If it fails, warn the user but continue (they can add scenes manually later).
+### 4. NanoBanana MCP installation
+
+NanoBanana is the AI image generation server used for scene creation. It must be configured as an MCP server in the user's `~/.claude.json`.
+
+**Step 1: Check if already installed**
+```bash
+python3 -c "import json; d=json.load(open('$HOME/.claude.json')); print('installed' if 'nanobanana' in d.get('mcpServers',{}) else 'missing')"
+```
+
+**Step 2: If missing, install it**
+
+1. Check that `uvx` is available:
+   ```bash
+   which uvx
+   ```
+   If missing, tell the user: "NanoBanana requires `uv` (Python package runner). Install it with `curl -LsSf https://astral.sh/uv/install.sh | sh` then restart your terminal."
+
+2. Ask the user for their **Gemini API key**. Tell them:
+   > NanoBanana uses Google's Gemini image generation. You need a Gemini API key.
+   > Get one free at: https://aistudio.google.com/apikey
+
+   Wait for the user to provide the key before proceeding.
+
+3. Add the NanoBanana MCP server to `~/.claude.json`:
+   ```python
+   import json, os
+
+   config_path = os.path.expanduser("~/.claude.json")
+   with open(config_path, "r") as f:
+       config = json.load(f)
+
+   if "mcpServers" not in config:
+       config["mcpServers"] = {}
+
+   config["mcpServers"]["nanobanana"] = {
+       "type": "stdio",
+       "command": "uvx",
+       "args": ["nanobanana-mcp-server@latest"],
+       "env": {
+           "GEMINI_API_KEY": "<USER_PROVIDED_KEY>"
+       }
+   }
+
+   with open(config_path, "w") as f:
+       json.dump(config, f, indent=2)
+   ```
+   Replace `<USER_PROVIDED_KEY>` with the actual key the user provided.
+
+4. Tell the user: "NanoBanana MCP has been installed. **You need to restart Claude Code** (`/exit` then relaunch) for the MCP server to become available."
+
+5. After restart confirmation, verify it works by generating a tiny test image with `mcp__nanobanana__generate_image`. If it fails, troubleshoot (bad API key, uvx not found, etc).
+
+**Step 3: If already installed, verify it works**
+Try generating a tiny test image to confirm NanoBanana is responsive. If it fails, warn the user but continue (they can add scenes manually later).
 
 Once all checks pass, print a brief status summary and move to Phase 1.
 
