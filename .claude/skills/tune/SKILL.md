@@ -11,7 +11,7 @@ You are helping the user fine-tune their brand's visual parameters by generating
 
 - **Brand name** (required) — must match a folder in `brands/`
 
-Parse from the user's message: `/tune gymshark` or `/tune amar`
+Parse from the user's message: `/tune gymshark` or `/tune <brand>`
 
 ## Step 1: Load Brand and Find a Test Scene
 

@@ -13,7 +13,7 @@ You are producing a complete Instagram carousel for a specific brand. This is a 
 - **Topic** (required) — the carousel subject
 - **Template** (optional) — `--template <name>` to use a specific visual template
 
-Parse from the user's message: `/generate gymshark "exercises you're doing wrong"` or `/generate amar "topic" --template bold-centered`
+Parse from the user's message: `/generate gymshark "exercises you're doing wrong"` or `/generate <brand> "topic" --template bold-centered`
 
 ## Step 1: Load Brand Config + Template
 

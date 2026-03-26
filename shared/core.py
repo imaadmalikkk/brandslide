@@ -2,14 +2,14 @@
 """
 ContentGenerator Core Engine — Brand-agnostic slide compositor.
 
-Extracted from the AMAR compose_slide.py. All brand-specific values
+Brand-agnostic slide compositor. All brand-specific values
 (colors, fonts, layout, logo) are passed via a brand_config dict
 loaded from each brand's brand.json.
 
 Usage:
     from shared.core import load_brand_config, compose_slide, process_config
 
-    brand = load_brand_config("brands/amar/brand.json")
+    brand = load_brand_config("brands/gymshark/brand.json")
     compose_slide("scene.png", slide_config, "output.png", brand)
 """
 
@@ -324,6 +324,189 @@ def render_text_shadow(img, shadow_cfg, scale_fn, draw_callback):
 
 
 # ---------------------------------------------------------------------------
+# Template extensions: highlight boxes, borders, watermarks, faux italic
+# ---------------------------------------------------------------------------
+
+def draw_checkerboard_border(draw_obj, img_w, img_h, scale_fn, border_cfg):
+    """Draw checkerboard / film strip borders along specified edges."""
+    positions = border_cfg.get("positions", ["top", "bottom"])
+    sq = scale_fn(border_cfg.get("square_size", 12))
+    rows = border_cfg.get("rows", 1)
+
+    for pos in positions:
+        for row in range(rows):
+            n_cells = (img_w if pos in ("top", "bottom") else img_h) // sq + 2
+            for ci in range(n_cells):
+                if (ci + row) % 2 != 0:
+                    continue
+                fill = (255, 255, 255, 200)
+                if pos == "top":
+                    x1, y1 = ci * sq, row * sq
+                elif pos == "bottom":
+                    x1, y1 = ci * sq, img_h - (rows - row) * sq
+                elif pos == "right":
+                    x1, y1 = img_w - (rows - row) * sq, ci * sq
+                elif pos == "left":
+                    x1, y1 = row * sq, ci * sq
+                else:
+                    continue
+                draw_obj.rectangle([x1, y1, x1 + sq, y1 + sq], fill=fill)
+
+
+def _apply_skew(layer, degrees):
+    """Apply faux-italic shear transform to an RGBA image layer.
+
+    Positive degrees = right-leaning italic (standard).
+    """
+    if degrees == 0:
+        return layer
+    w, h = layer.size
+    shear = math.tan(math.radians(abs(degrees)))
+    shift = int(h * shear)
+    new_w = w + shift
+    if degrees > 0:
+        matrix = (1, -shear, shift, 0, 1, 0)
+    else:
+        matrix = (1, shear, 0, 0, 1, 0)
+    return layer.transform((new_w, h), Image.AFFINE, matrix, resample=Image.BICUBIC)
+
+
+def _resolve_highlight_colors(highlight_cfg):
+    """Process highlight config, converting hex color strings to RGB tuples."""
+    resolved = dict(highlight_cfg)
+    for key in ("accent_box_color", "accent_text_color",
+                "default_box_color", "default_text_color"):
+        val = resolved.get(key)
+        if isinstance(val, str) and val.startswith("#"):
+            resolved[key] = hex_to_rgb(val)
+        elif isinstance(val, (list, tuple)):
+            resolved[key] = tuple(val)
+    return resolved
+
+
+def _render_highlight_segment(img, text, font, x, y, ascent,
+                               text_w, pad_x, pad_y, box_color, text_color, skew=0):
+    """Render a single text segment with optional highlight box and faux italic."""
+    if skew:
+        layer_h = ascent + 2 * pad_y
+        shear_extra = int(layer_h * abs(math.tan(math.radians(skew)))) + 10
+        layer_w = text_w + 2 * pad_x + shear_extra
+        layer = Image.new("RGBA", (layer_w, layer_h), (0, 0, 0, 0))
+        ld = ImageDraw.Draw(layer)
+        if box_color:
+            ld.rectangle([0, 0, text_w + 2 * pad_x, layer_h],
+                         fill=(*box_color, 255))
+        ld.text((pad_x, pad_y), text, fill=(*text_color, 255), font=font)
+        layer = _apply_skew(layer, skew)
+        px, py = x - pad_x, y - pad_y
+        if px < 0:
+            layer = layer.crop((-px, 0, layer.size[0], layer.size[1]))
+            px = 0
+        img.paste(layer, (px, py), layer)
+    else:
+        draw = ImageDraw.Draw(img)
+        if box_color:
+            draw.rectangle(
+                [x - pad_x, y - pad_y, x + text_w + pad_x, y + ascent + pad_y],
+                fill=(*box_color, 255))
+        draw.text((x, y), text, fill=(*text_color, 255), font=font)
+
+
+def render_highlighted_headline(img, all_lines, accent_word, font,
+                                 x_start, y_start, max_w,
+                                 highlight_cfg, scale_fn,
+                                 font_path, font_index=0,
+                                 text_align="left"):
+    """Render headline lines with colored highlight boxes behind text.
+
+    Lines containing the accent word get an accent-colored box.
+    Other lines get the default box (or no box if all_lines_highlighted=False).
+    Supports faux-italic via skew_degrees.
+
+    Returns y position after last rendered line.
+    """
+    accent_box = tuple(highlight_cfg["accent_box_color"])
+    accent_txt = tuple(highlight_cfg["accent_text_color"])
+    default_box = tuple(highlight_cfg["default_box_color"])
+    default_txt = tuple(highlight_cfg["default_text_color"])
+    pad_x = scale_fn(highlight_cfg.get("padding_x", 15))
+    pad_y = scale_fn(highlight_cfg.get("padding_y", 8))
+    box_gap = scale_fn(highlight_cfg.get("box_gap", 8))
+    skew = highlight_cfg.get("skew_degrees", 0)
+    all_highlighted = highlight_cfg.get("all_lines_highlighted", True)
+
+    upper_accent = accent_word.upper() if accent_word else ""
+
+    # Pre-pass: find smallest font that fits all lines
+    base_size = font.size
+    effective_font = font
+    shrink_w = max_w - 2 * pad_x
+    if skew:
+        shrink_w = int(shrink_w * 0.80)
+    for line in all_lines:
+        test_font = get_font_for_line(line, font, base_size, shrink_w,
+                                       font_path, font_index)
+        if test_font.size < effective_font.size:
+            effective_font = test_font
+
+    ascent, _ = effective_font.getmetrics()
+    y = y_start
+
+    for line in all_lines:
+        has_accent = upper_accent and upper_accent in line
+        is_full_accent = has_accent and line.strip() == upper_accent
+
+        bbox = effective_font.getbbox(line)
+        tw = bbox[2] - bbox[0]
+
+        tx = x_start if text_align == "left" else x_start + (max_w - tw) // 2
+
+        if has_accent and not is_full_accent:
+            # Split around accent word and render each part
+            idx = line.index(upper_accent)
+            before = line[:idx].rstrip()
+            accent_str = line[idx:idx + len(upper_accent)]
+            after = line[idx + len(upper_accent):].lstrip()
+            space_w = effective_font.getbbox(" ")[2] - effective_font.getbbox(" ")[0]
+
+            parts = []
+            if before:
+                bc = default_box if all_highlighted else None
+                parts.append((before, bc, default_txt))
+            parts.append((accent_str, accent_box, accent_txt))
+            if after:
+                ac = default_box if all_highlighted else None
+                parts.append((after, ac, default_txt))
+
+            cx = tx
+            for j, (text, b_col, t_col) in enumerate(parts):
+                pw = effective_font.getbbox(text)[2] - effective_font.getbbox(text)[0]
+                _render_highlight_segment(img, text, effective_font, cx, y,
+                                          ascent, pw, pad_x, pad_y, b_col, t_col, skew)
+                cx += pw
+                if j < len(parts) - 1:
+                    gap = space_w + (pad_x if b_col else 0)
+                    cx += gap
+
+        elif is_full_accent or has_accent:
+            _render_highlight_segment(img, line, effective_font, tx, y,
+                                      ascent, tw, pad_x, pad_y,
+                                      accent_box, accent_txt, skew)
+        elif all_highlighted:
+            _render_highlight_segment(img, line, effective_font, tx, y,
+                                      ascent, tw, pad_x, pad_y,
+                                      default_box, default_txt, skew)
+        else:
+            _render_highlight_segment(img, line, effective_font, tx, y,
+                                      ascent, tw, pad_x, pad_y,
+                                      None, default_txt, skew)
+
+        y += ascent + 2 * pad_y + box_gap
+
+    return y
+
+
+# ---------------------------------------------------------------------------
 # Template-driven compositor
 # ---------------------------------------------------------------------------
 
@@ -500,13 +683,48 @@ def _compose_slide_templated(scene_path: str, slide_config: dict, output_path: s
         img = Image.alpha_composite(img, overlay)
     # "none" = no gradient
 
+    # --- Watermark (large semi-transparent logo behind text) ---
+    watermark_cfg = template.get("watermark")
+    if watermark_cfg and watermark_cfg.get("enabled"):
+        wm_opacity = watermark_cfg.get("opacity", 0.08)
+        wm_size_pct = watermark_cfg.get("size_pct", 0.5)
+        try:
+            wm_raw = Image.open(logo_cfg["svg_path"]).convert("RGBA")
+            ow, oh = wm_raw.size
+            target_w = int(w * wm_size_pct)
+            target_h = int(target_w * oh / ow)
+            wm_raw = wm_raw.resize((target_w, target_h), Image.LANCZOS)
+            r, g, b, a = wm_raw.split()
+            a = a.point(lambda x: int(x * wm_opacity))
+            wm_img = Image.merge("RGBA", (r, g, b, a))
+            wm_x = (w - target_w) // 2
+            wm_y = (h - target_h) // 2
+            img.paste(wm_img, (wm_x, wm_y), wm_img)
+        except Exception:
+            pass
+
+    # --- Checkerboard / film strip border ---
+    border_cfg = template.get("border")
+    if border_cfg:
+        border_draw = ImageDraw.Draw(img)
+        draw_checkerboard_border(border_draw, w, h, s, border_cfg)
+
     draw = ImageDraw.Draw(img)
 
     # --- Render headline ---
-    # For left-align, adjust margin_side param to render_headline_block
-    if text_align == "left":
-        # render_headline_block centers text within max_text_w by default
-        # For left-align, we render each line at margin_side directly
+    highlight_cfg = template.get("highlight")
+    if highlight_cfg and highlight_cfg.get("enabled"):
+        h_cfg = _resolve_highlight_colors(highlight_cfg)
+        # Merge per-slide highlight overrides if present
+        slide_hl = tmpl.get("highlight_override")
+        if slide_hl:
+            h_cfg.update(slide_hl)
+        y_after = render_highlighted_headline(
+            img, all_lines, accent_word, headline_font,
+            margin_side, text_top_y, max_text_w,
+            h_cfg, s, hl_cfg["path"], hl_cfg.get("index", 0), text_align)
+        draw = ImageDraw.Draw(img)  # refresh after paste operations
+    elif text_align == "left":
         y = text_top_y
         effective_font = headline_font
         base_size = headline_font.size

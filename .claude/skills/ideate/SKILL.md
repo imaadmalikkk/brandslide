@@ -12,7 +12,7 @@ You are brainstorming carousel ideas for a specific brand. The goal is to produc
 - **Brand name** (required) — must match a folder in `brands/`
 - **Pillar filter** (optional) — limit ideas to a specific content pillar
 
-Parse from the user's message: `/ideate amar` or `/ideate amar arabic`
+Parse from the user's message: `/ideate gymshark` or `/ideate gymshark fitness`
 
 ## Flow
 

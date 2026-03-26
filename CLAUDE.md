@@ -40,9 +40,8 @@ This hybrid approach guarantees pixel-perfect font consistency across all slides
 Every command takes a brand name. The brand name must match a folder in `brands/`:
 
 ```
-/ideate amar              → brainstorm for AMAR
-/generate amar "topic"    → produce carousel for AMAR
-/generate mathani "topic" → produce carousel for Mathani
+/ideate gymshark              → brainstorm for Gymshark
+/generate gymshark "topic"    → produce carousel for Gymshark
 ```
 
 ### Brand Config (brand.json)
@@ -174,7 +173,7 @@ These apply to ALL brands:
 Use `/setup <brand-name>` for the guided flow, or manually:
 
 1. Create `brands/<brand-slug>/`
-2. Create `brand.json` (use `brands/amar/brand.json` as reference)
+2. Create `brand.json` (use `brands/gymshark/brand.json` as reference)
 3. Create `CLAUDE.md` with content strategy
 4. Copy `shared/templates/compose_template.py` to `compose_slide.py`
 5. Add logo as `logo.svg`

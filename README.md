@@ -5,8 +5,6 @@ Turn any brand into professional Instagram carousels using Claude Code.
 AI generates cinematic scenes. Code handles typography. Every slide is pixel-perfect and on-brand.
 
 <p align="center">
-  <img src="docs/screenshots/amar-hook.jpg" width="200"/>
-  <img src="docs/screenshots/mathani-hook.jpg" width="200"/>
   <img src="docs/screenshots/gymshark-hook.jpg" width="200"/>
 </p>
 
